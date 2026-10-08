@@ -8,7 +8,7 @@ Highest-ROI autonomous income micro-SaaS for operators who hate dropped commitme
 
 | Capability | Evidence Level | Notes |
 |------------|----------------|-------|
-| Core extraction | Level 2–3 (local + integration ready) | Works with Anthropic or OpenAI key |
+| Core extraction | Level 2–3 | Works with Anthropic, OpenAI, or **Google Gemini** |
 | Landing + Dashboard | Level 2 | Production UI |
 | Rate limiting | Level 2 | In-memory per-IP (20/hr free) |
 | Security headers | Level 2 | X-Frame-Options, nosniff, etc. |
@@ -19,6 +19,14 @@ Highest-ROI autonomous income micro-SaaS for operators who hate dropped commitme
 | Integrations | Level 0 | Notion / Slack / Linear planned |
 | Revenue | None | Zero verified transactions |
 
+## Supported Models (Priority Order)
+
+1. **Anthropic** (`ANTHROPIC_API_KEY`) → Claude Sonnet  
+2. **OpenAI** (`OPENAI_API_KEY`) → GPT-4o  
+3. **Google Gemini** (`GOOGLE_GENERATIVE_AI_API_KEY`) → `gemini-2.0-flash`  
+
+Only one key is required. The system automatically selects the highest-priority available model.
+
 ## Live Demo / Deploy
 
 One-click ready on Vercel.
@@ -27,6 +35,7 @@ One-click ready on Vercel.
 2. Add **at least one** of:
    - `ANTHROPIC_API_KEY`
    - `OPENAI_API_KEY`
+   - `GOOGLE_GENERATIVE_AI_API_KEY`  ← **your Gemini key goes here**
 3. Deploy
 
 Health check after deploy: `GET /api/health`
@@ -36,7 +45,7 @@ Health check after deploy: `GET /api/health`
 ```bash
 npm install
 cp .env.example .env.local
-# Add your Anthropic or OpenAI key
+# Add your Gemini (or other) key
 npm run dev
 ```
 
@@ -54,7 +63,7 @@ Open http://localhost:3000
   - Supporting quote
   - Optional notes
 - Copy as Markdown or CSV
-- Model preference: Anthropic Claude Sonnet → OpenAI GPT-4o fallback
+- Multi-provider support (Anthropic / OpenAI / Gemini)
 - Input validation + size limits
 - Simple rate limiting (20 generations / hour / IP on free tier)
 - Security headers
@@ -66,7 +75,7 @@ Open http://localhost:3000
 USER → Landing / Dashboard
      → POST /api/generate
      → Rate limit + validation
-     → Model routing (Anthropic preferred)
+     → Model routing (Anthropic → OpenAI → Gemini)
      → generateObject (Zod schema)
      → Structured items + meta
      → Client copy / future push
@@ -93,7 +102,7 @@ USER → Landing / Dashboard
 
 - Next.js 15 (App Router)
 - Vercel AI SDK
-- Claude Sonnet / GPT-4o
+- Claude Sonnet / GPT-4o / Gemini 2.0 Flash
 - Zod structured output
 - Tailwind CSS
 - TypeScript

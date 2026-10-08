@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateObject } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 
 const ActionItemSchema = z.object({
@@ -77,28 +78,33 @@ export async function POST(req: NextRequest) {
 
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     const openaiKey = process.env.OPENAI_API_KEY;
+    const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
-    if (!anthropicKey && !openaiKey) {
+    if (!anthropicKey && !openaiKey && !googleKey) {
       return NextResponse.json(
         {
           error:
-            'No AI API key configured. Add ANTHROPIC_API_KEY or OPENAI_API_KEY to environment variables.',
+            'No AI API key configured. Add ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY to environment variables.',
           code: 'MISSING_API_KEY',
         },
         { status: 500 }
       );
     }
 
-    // Prefer Anthropic, fallback to OpenAI
+    // Priority: Anthropic → OpenAI → Gemini
     let model;
     let modelName: string;
 
     if (anthropicKey) {
       model = createAnthropic({ apiKey: anthropicKey })('claude-sonnet-4-20250514');
       modelName = 'claude-sonnet-4';
-    } else {
-      model = createOpenAI({ apiKey: openaiKey! })('gpt-4o');
+    } else if (openaiKey) {
+      model = createOpenAI({ apiKey: openaiKey })('gpt-4o');
       modelName = 'gpt-4o';
+    } else {
+      // Gemini — use Flash for speed/cost on structured extraction
+      model = createGoogleGenerativeAI({ apiKey: googleKey! })('gemini-2.0-flash');
+      modelName = 'gemini-2.0-flash';
     }
 
     const systemPrompt = `You are an expert executive assistant specialized in extracting clear, assignable action items from meeting transcripts.
@@ -157,7 +163,7 @@ Rules:
     if (msg.includes('rate limit') || msg.includes('429')) {
       status = 429;
       code = 'PROVIDER_RATE_LIMIT';
-    } else if (msg.includes('API key') || msg.includes('auth') || msg.includes('401') || msg.includes('403')) {
+    } else if (msg.includes('API key') || msg.includes('auth') || msg.includes('401') || msg.includes('403') || msg.includes('API_KEY')) {
       status = 502;
       code = 'PROVIDER_AUTH';
     } else if (msg.includes('timeout') || msg.includes('ETIMEDOUT')) {
