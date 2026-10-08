@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 type ActionItem = {
@@ -12,21 +12,67 @@ type ActionItem = {
   notes?: string;
 };
 
+type Meta = {
+  model?: string;
+  latencyMs?: number;
+  itemCount?: number;
+  rateLimitRemaining?: number;
+};
+
+const FREE_LIMIT = 5;
+const STORAGE_KEY = 'actionforge_usage';
+
+function getUsage(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return 0;
+    const data = JSON.parse(raw);
+    // Reset daily for demo purposes
+    const today = new Date().toDateString();
+    if (data.date !== today) return 0;
+    return data.count || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function incrementUsage() {
+  if (typeof window === 'undefined') return;
+  const today = new Date().toDateString();
+  const current = getUsage();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, count: current + 1 }));
+}
+
 export default function DashboardPage() {
   const [transcript, setTranscript] = useState('');
   const [meetingType, setMeetingType] = useState('general');
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<ActionItem[] | null>(null);
+  const [meta, setMeta] = useState<Meta | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState(0);
+
+  useEffect(() => {
+    setUsage(getUsage());
+  }, []);
+
+  const remaining = Math.max(0, FREE_LIMIT - usage);
 
   async function handleGenerate() {
     if (!transcript.trim()) {
       setError('Please paste a transcript or notes first.');
       return;
     }
+    if (remaining <= 0) {
+      setError('Free tier limit reached (5 meetings). Upgrade to Pro for unlimited generations.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setItems(null);
+    setMeta(null);
 
     try {
       const res = await fetch('/api/generate', {
@@ -38,10 +84,14 @@ export default function DashboardPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Generation failed');
+        const code = data.code ? ` [${data.code}]` : '';
+        throw new Error((data.error || 'Generation failed') + code);
       }
 
       setItems(data.actionItems || []);
+      setMeta(data.meta || null);
+      incrementUsage();
+      setUsage(getUsage());
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Check your API key setup.');
     } finally {
@@ -81,7 +131,9 @@ export default function DashboardPage() {
             <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold text-sm">AF</div>
             <span className="font-semibold">ActionForge</span>
           </Link>
-          <div className="text-sm text-slate-500">Free tier · 5 meetings remaining</div>
+          <div className="text-sm text-slate-500">
+            Free tier · <span className={remaining <= 1 ? 'text-amber-600 font-medium' : ''}>{remaining} meetings remaining</span>
+          </div>
         </div>
       </nav>
 
@@ -116,10 +168,10 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3 items-center">
             <button
               onClick={handleGenerate}
-              disabled={loading}
+              disabled={loading || remaining <= 0}
               className="inline-flex items-center rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60 transition"
             >
               {loading ? 'Extracting action items...' : 'Generate Action Items'}
@@ -139,6 +191,11 @@ export default function DashboardPage() {
                   Copy CSV
                 </button>
               </>
+            )}
+            {meta && (
+              <span className="text-xs text-slate-400">
+                {meta.model} · {meta.latencyMs}ms · {meta.itemCount} items
+              </span>
             )}
           </div>
 
